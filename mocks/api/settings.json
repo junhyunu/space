@@ -1,9 +1,0 @@
-{
-  "vaultPath": "C:UsersmeSpaceLog",
-  "shortcut": "CommandOrControl+Shift+Space",
-  "rediscoveryNotification": true,
-  "notificationTime": "15:00",
-  "launchAtLogin": true,
-  "lastNotifiedLocalDate": "2026-11-10",
-  "onboardingDone": true
-}

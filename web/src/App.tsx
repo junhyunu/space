@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import { ERROR_MESSAGES } from "@spacelog/shared/errors";
 import { ControlsHint } from "./home/ControlsHint.tsx";
 import { EmptyState } from "./home/EmptyState.tsx";
 import { HomeBanner } from "./home/HomeBanner.tsx";
@@ -24,10 +23,8 @@ import { ProbeModal } from "./probe/ProbeModal.tsx";
  * 각자 화면이 나오면 아래 "자리 표시" 컴포넌트를 바꿔 끼운다.
  */
 export function App() {
-  const auth = useStore((s) => s.auth);
   useEscape();
 
-  if (auth === "required") return <AuthRequired />;
   return (
     <div className="app">
       <UniverseCanvas />
@@ -42,17 +39,6 @@ export function App() {
       <PanelPlaceholder />
       <ProbeModal />
       <ToastHost />
-    </div>
-  );
-}
-
-function AuthRequired() {
-  return (
-    <div className="auth-required">
-      <div className="card" role="alert">
-        <h1>{ERROR_MESSAGES.UNAUTHORIZED}</h1>
-        <p>이 창은 보안을 위해 수집 앱에서 열어야 볼 수 있어요.</p>
-      </div>
     </div>
   );
 }

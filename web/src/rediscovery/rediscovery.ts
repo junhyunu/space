@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { toLocalDateString } from "@spacelog/shared/period";
 import type { RediscoveryEventRequest, RediscoveryTodayResponse, Star } from "@spacelog/shared/types";
 import { api } from "../api/client.ts";
-import { store } from "../state/store.ts";
-import { cardShownKey, isRediscoveryLink, periodToShowStar, starLocalDate } from "./deepLink.ts";
+import { store, useStore } from "../state/store.ts";
+import { cardShownKey, periodToShowStar, starLocalDate } from "./deepLink.ts";
 
 /** 이벤트 기록은 측정용이라 실패해도 화면을 막지 않는다 */
 function record(event: RediscoveryEventRequest): void {
@@ -26,18 +26,6 @@ export async function openRediscoveredStar(star: Star): Promise<void> {
 /** 자동 비행(1.2초)보다 넉넉하게 */
 export const FLY_WAIT_LIMIT_MS = 2500;
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
-
-/** 수집 앱 알림이 연 주소(`#/star/:id?from=rediscovery`) 처리. opened 이벤트는 수집 앱이 이미 기록한다 (SPEC 3-6) */
-export async function handleRediscoveryDeepLink(routeStarId: string | null, params: URLSearchParams): Promise<boolean> {
-  if (!routeStarId || !isRediscoveryLink(params)) return false;
-  try {
-    const star = await api.star(routeStarId);
-    await openRediscoveredStar(star);
-  } catch {
-    // 삭제된 별 등: 기본 라우팅(별 상세 자리)이 오류를 보여준다
-  }
-  return true;
-}
 
 export interface RediscoveryCardState {
   today: RediscoveryTodayResponse;
@@ -64,8 +52,11 @@ function markShownOnce(localDate: string, starId: string): boolean {
  */
 export function useRediscoveryCard(): RediscoveryCardState {
   const [today, setToday] = useState<RediscoveryTodayResponse>(null);
+  // 전체 별 개수가 바뀌면(기록 넣기·예시 별) 카드가 아직 없을 때 다시 고른다. 닫은 별은 isDismissedToday 가 거른다
+  const total = useStore((s) => s.planets.reduce((n, p) => n + (p.starCountTotal ?? 0), 0));
 
   useEffect(() => {
+    if (today) return;
     let alive = true;
     api
       .rediscoveryToday()
@@ -79,7 +70,7 @@ export function useRediscoveryCard(): RediscoveryCardState {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [total, today]);
 
   return {
     today,

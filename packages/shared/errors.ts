@@ -59,10 +59,10 @@ export const ERROR_MESSAGES: Record<ErrorCode, string> = {
   FORBIDDEN_ORIGIN: "허용되지 않은 곳에서 온 요청이에요", // (SPEC 제안) 사용자에게는 거의 보이지 않음
   DUPLICATE: "이미 {planet}에 있는 별이에요", // SPEC 1-1, P 2-6
   FOLDER_NOT_ALLOWED: "폴더는 아직 넣을 수 없어요. 파일을 넣어 주세요", // P 3-3
-  FILE_TOO_LARGE: "200MB가 넘는 파일은 넣을 수 없어요", // (SPEC 제안) P 2-6, 3-3
+  FILE_TOO_LARGE: "50MB가 넘는 파일은 넣을 수 없어요", // 브라우저 저장소 기준
   TOO_MANY_FILES: "한 번에 20개까지 넣을 수 있어요", // (SPEC 제안) P 2-6, 3-3
   UNSUPPORTED_CLIPBOARD: "지원하지 않는 형식이에요 ({format})", // (SPEC 제안) P 3-3 "형식 이름을 알려준다"
-  TEXT_EMPTY: "클립보드가 비어 있어요", // P 3-3
+  TEXT_EMPTY: "넣을 내용이 비어 있어요", // P 3-3
   PLANET_NAME_INVALID: "행성 이름은 1~20자로 지어 주세요", // (SPEC 제안) P 2-4
   PLANET_NAME_DUPLICATE: "같은 이름의 행성이 이미 있어요", // (SPEC 제안) P 2-4
   PLANET_LIMIT: "행성은 50개까지 만들 수 있어요", // SPEC 1-5

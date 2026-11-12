@@ -16,7 +16,6 @@ export interface ToastItem {
 export type FlyHandler = (planetId: string) => Promise<boolean>;
 
 export interface Store extends WebState {
-  auth: "checking" | "ok" | "required";
   route: Route;
   loading: boolean;
   toasts: ToastItem[];
@@ -54,7 +53,6 @@ export interface Store extends WebState {
 
   // ── 라우팅·알림 ──
   applyRoute(route: Route): void;
-  setAuth(auth: Store["auth"]): void;
   setConnection(c: WebState["connection"]): void;
   showToast(message: string, kind?: ToastItem["kind"]): void;
   dismissToast(id: number): void;
@@ -95,7 +93,6 @@ export function createWebStore(navigate: (hash: string) => void = defaultNavigat
       selectedStarId: null,
       cargo: [],
       exportFormat: "claude",
-      auth: "checking",
       route: { name: "home" },
       loading: false,
       toasts: [],
@@ -262,8 +259,8 @@ export function createWebStore(navigate: (hash: string) => void = defaultNavigat
         else if (route.name === "star") {
           const star = get().stars.find((s) => s.id === route.id);
           set({ selectedStarId: route.id, selectedPlanetId: star?.planetId ?? get().selectedPlanetId });
-          if (!star && get().auth === "ok") {
-            // 기간 밖 별(딥링크 등): 별을 받아 행성을 찾는다
+          if (!star) {
+            // 기간 밖 별(재발견·새로고침 등): 별을 받아 행성을 찾는다
             api.star(route.id).then(
               (s) => {
                 if (get().selectedStarId === s.id) set({ selectedPlanetId: s.planetId });
@@ -278,10 +275,6 @@ export function createWebStore(navigate: (hash: string) => void = defaultNavigat
             );
           }
         }
-      },
-
-      setAuth(auth) {
-        set({ auth });
       },
 
       setConnection(connection) {

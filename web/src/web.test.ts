@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { beforeEach, describe, it } from "node:test";
 import type { Period, Planet, Star } from "@spacelog/shared/types";
-import { request, RequestError, setApiListeners, setMock } from "./api/client.ts";
-import { formatHash, parseHash, takeToken } from "./router.ts";
+import { api, RequestError, setApiListeners, setBackend, type Backend } from "./api/client.ts";
+import { formatHash, parseHash } from "./router.ts";
 import { createWebStore } from "./state/store.ts";
 
 /** actual 이 expected 의 키를 모두 같은 값으로 갖는지 (중첩 객체도 부분 비교) */
@@ -23,18 +23,17 @@ describe("router", () => {
     assert.equal(formatHash({ name: "planet", id: "p/1" }), "#/planet/p%2F1");
   });
 
-  it("토큰을 꺼내고 주소에서 지운다 (다른 값은 남긴다)", () => {
-    assert.deepEqual(takeToken("", "#/star/s-1?token=abc&from=rediscovery"), {
-      token: "abc",
-      cleanSearch: "",
-      cleanHash: "#/star/s-1?from=rediscovery",
-    });
-    assert.deepEqual(takeToken("?token=xyz", ""), { token: "xyz", cleanSearch: "", cleanHash: "#/" });
-  });
 });
 
 const planet = (id: string): Planet => ({ id, name: id, system: null, defaultFor: null, colorToken: "planet-1", createdAtUtc: "" });
 const star = (id: string, planetId: string) => ({ id, planetId, kind: "text" }) as Star;
+/** 테스트에서 부르지 않을 메서드는 실패하게 둔다 */
+function fakeBackend(over: Partial<Backend>): Backend {
+  const no = async () => {
+    throw new Error("테스트에서 쓰지 않는 메서드");
+  };
+  return { universe: no, star: no, createStars: no, thumbnailUrl: no, exportCargo: no, rediscoveryToday: no, rediscoveryEvent: no, seedDemo: no, ...over } as Backend;
+}
 const P: Period = { preset: "today", from: "2026-11-11", to: "2026-11-11" };
 
 describe("store 계약", () => {
@@ -45,16 +44,20 @@ describe("store 계약", () => {
   beforeEach(() => {
     hashes = [];
     universe = { stars: [star("s1", "a")], planets: [planet("a"), planet("b")] };
-    setMock(async (_m, path) => {
-      if (path.startsWith("/api/universe")) {
-        if (universe instanceof Error) throw universe;
-        return universe;
-      }
-      if (path === "/api/stars/far") return star("far", "b");
-      throw new Error(path);
-    });
+    setBackend(
+      fakeBackend({
+        universe: async () => {
+          if (universe instanceof Error) throw universe;
+          return universe;
+        },
+        star: async (id) => {
+          if (id === "far") return star("far", "b");
+          throw new RequestError("NOT_FOUND", "없음");
+        },
+      }),
+    );
     s = createWebStore((h) => hashes.push(h));
-    s.setState({ auth: "ok", stars: [star("s1", "a")], planets: [planet("a"), planet("b")] });
+    s.setState({ stars: [star("s1", "a")], planets: [planet("a"), planet("b")] });
   });
 
   it("openPanel·openStar·closePanel 이 URL과 선택 상태를 맞춘다", () => {
@@ -129,39 +132,36 @@ describe("store 계약", () => {
 
   it("다시 받기 실패 시 마지막 데이터를 유지한다 (SPEC 3-4)", async () => {
     universe = new Error("down");
-    await assert.rejects(s.getState().refresh());
+    await s.getState().refresh();
     assert.equal(s.getState().stars.length, 1);
   });
 
   it("오늘 0건이면 이번 주로 넓힌다", async () => {
     let calls = 0;
-    setMock(async () => (++calls === 1 ? { stars: [], planets: [planet("a")] } : { stars: [star("s9", "a")], planets: [planet("a")] }));
+    setBackend(fakeBackend({ universe: async () => (++calls === 1 ? { stars: [], planets: [planet("a")] } : { stars: [star("s9", "a")], planets: [planet("a")] }) }));
     await s.getState().loadInitial();
     has(s.getState(), { periodAutoExpanded: true, period: { preset: "week" } });
   });
 });
 
 describe("api client", () => {
-  it("서버에 닿지 못하면 lost, 401이면 다시 열기 화면, 오류 문구는 서버 것을 쓴다", async () => {
+  it("저장소 오류는 lost + STORAGE, 알려진 오류는 그대로 전한다", async () => {
     const events: string[] = [];
-    setApiListeners({ onConnection: (c) => events.push(c), onUnauthorized: () => events.push("401") });
-    setMock(null);
-    const real = globalThis.fetch;
-    try {
-      globalThis.fetch = (async () => {
-        throw new TypeError("offline");
-      }) as typeof fetch;
-      await assert.rejects(request("GET", "/api/health"), { code: "NETWORK" });
-
-      globalThis.fetch = (async () => new Response(null, { status: 401 })) as typeof fetch;
-      await assert.rejects(request("GET", "/api/health"), RequestError);
-
-      globalThis.fetch = (async () =>
-        new Response(JSON.stringify({ error: { code: "PLANET_LIMIT", message: "서버 문구" } }), { status: 409 })) as typeof fetch;
-      await assert.rejects(request("POST", "/api/planets", {}), { code: "PLANET_LIMIT", message: "서버 문구" });
-    } finally {
-      globalThis.fetch = real;
-    }
-    assert.deepEqual(events, ["lost", "ok", "401", "ok"]);
+    setApiListeners({ onConnection: (c) => events.push(c) });
+    setBackend(
+      fakeBackend({
+        universe: async () => {
+          throw new DOMException("blocked", "SecurityError");
+        },
+        star: async () => {
+          throw new RequestError("NOT_FOUND", "별을 찾을 수 없어요");
+        },
+        seedDemo: async () => 23,
+      }),
+    );
+    await assert.rejects(api.universe("2026-11-11", "2026-11-11"), { code: "STORAGE" });
+    await assert.rejects(api.star("x"), { code: "NOT_FOUND", message: "별을 찾을 수 없어요" });
+    assert.equal(await api.seedDemo(), 23);
+    assert.deepEqual(events, ["lost", "ok", "ok"]);
   });
 });

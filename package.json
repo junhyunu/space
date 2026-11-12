@@ -7,8 +7,10 @@
     "web"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "node --test \"packages/**/*.test.ts\" \"mocks/**/*.test.ts\" \"web/src/**/*.test.ts\" \"apps/**/*.test.ts\""
+    "dev": "npm run dev -w @spacelog/web",
+    "build": "npm run build -w @spacelog/web",
+    "typecheck": "tsc --noEmit && npm run typecheck -w @spacelog/web",
+    "test": "node --test \"packages/**/*.test.ts\" \"web/src/**/*.test.ts\""
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { requestObjectUrl } from "../api/client.ts";
+import { api } from "../api/client.ts";
 import type { Star } from "@spacelog/shared/types";
 import { KindIcon } from "./KindIcon.tsx";
 
 /**
  * 썸네일 또는 유형 아이콘 (POLICY 2-7). 처리 중이면 스켈레톤 (SPEC 2-1).
- * <img src>는 토큰 헤더를 못 붙여서 fetch 로 받아 blob URL 로 보여준다.
+ * 이미지 원본은 브라우저 저장소에 Blob 으로 있어 blob URL 로 보여준다.
  */
 export function Thumbnail({ star, size = 48 }: { star: Pick<Star, "id" | "kind" | "thumbnailStatus">; size?: number }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export function Thumbnail({ star, size = 48 }: { star: Pick<Star, "id" | "kind" 
     let url: string | null = null;
     let alive = true;
     setFailed(false);
-    requestObjectUrl(`/api/stars/${encodeURIComponent(star.id)}/thumbnail`).then(
+    api.thumbnailUrl(star.id).then(
       (u) => (alive ? setSrc((url = u)) : URL.revokeObjectURL(u)),
       () => alive && setFailed(true),
     );

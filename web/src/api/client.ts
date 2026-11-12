@@ -1,113 +1,62 @@
-// 로컬 API fetch 래퍼 (SPEC 2-6, 3-3).
-// - 모든 요청에 X-Session-Token 헤더
-// - 오류는 RequestError(code, 화면 문구)로 던진다. 서버 문구가 있으면 그것을, 없으면 shared 기본 문구를 쓴다
-// - 서버에 닿지 못하면(네트워크 실패) connection = "lost", 응답을 받으면 "ok"
-import { ERROR_MESSAGES, isApiError, type ErrorCode } from "@spacelog/shared/errors";
-import type {
-  ExportRequest,
-  ExportResponse,
-  RediscoveryEventRequest,
-  RediscoveryTodayResponse,
-  StarResponse,
-  UniverseResponse,
-} from "@spacelog/shared/types";
+// 데이터 창구. 원래는 로컬 서버 fetch 래퍼였고, 지금은 브라우저 저장소(local/)를 부른다.
+// - 화면은 이 api 객체만 쓴다 (예전 서버 API와 같은 모양)
+// - 저장소를 못 열면 connection = "lost", 성공하면 "ok"
+import { idbArchive } from "../local/archive.ts";
+import { createLocalApi, type CreateInput, type LocalApi } from "../local/localApi.ts";
+import { seedDemo } from "../local/seed.ts";
+import { RequestError, STORAGE_MESSAGE } from "./errors.ts";
 
-const TOKEN_KEY = "space-archive.sessionToken";
+export { RequestError, STORAGE_MESSAGE } from "./errors.ts";
 
-export function getToken(): string | null {
-  try {
-    return sessionStorage.getItem(TOKEN_KEY);
-  } catch {
-    return null;
-  }
-}
-
-export function saveToken(token: string): void {
-  try {
-    sessionStorage.setItem(TOKEN_KEY, token);
-  } catch {
-    // 저장소를 못 쓰면 이번 페이지에서만 쓴다
-    memoryToken = token;
-  }
-}
-let memoryToken: string | null = null;
-const currentToken = () => getToken() ?? memoryToken;
-
-/** 서버 오류 코드가 아닌, 웹에서만 생기는 실패 */
-export const NETWORK_MESSAGE = "수집 앱이 꺼져 있거나 응답하지 않아요"; // SPEC 3-4
-const UNKNOWN_MESSAGE = "문제가 생겼어요. 잠시 후 다시 시도해 주세요";
-
-/** API 요청 실패. code 는 shared 오류 코드 18종 또는 웹 전용 "NETWORK" · "UNKNOWN" */
-export class RequestError extends Error {
-  code: ErrorCode | "NETWORK" | "UNKNOWN";
-  status: number;
-  constructor(code: RequestError["code"], message: string, status: number) {
-    super(message);
-    this.code = code;
-    this.status = status;
-  }
-}
-
-type Listeners = { onConnection(s: "ok" | "lost"): void; onUnauthorized(): void };
-let listeners: Listeners = { onConnection() {}, onUnauthorized() {} };
+type Listeners = { onConnection(s: "ok" | "lost"): void };
+let listeners: Listeners = { onConnection() {} };
 export function setApiListeners(l: Listeners): void {
   listeners = l;
 }
 
-type Mock = (method: string, path: string, body?: unknown) => Promise<unknown>;
-let mock: Mock | null = null;
-/** 목업 모드(`npm run dev:mock`)에서 main.ts가 등록한다. */
-export function setMock(m: Mock | null): void {
-  mock = m;
+export type Backend = Pick<LocalApi, "universe" | "star" | "createStars" | "thumbnailUrl" | "exportCargo" | "rediscoveryToday" | "rediscoveryEvent"> & {
+  seedDemo(): Promise<number>;
+};
+
+function defaultBackend(): Backend {
+  const archive = idbArchive();
+  return { ...createLocalApi(archive), seedDemo: () => seedDemo(archive) };
 }
 
-async function send(method: string, path: string, body?: unknown): Promise<Response> {
-  const headers: Record<string, string> = {};
-  const token = currentToken();
-  if (token) headers["X-Session-Token"] = token;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  let res: Response;
+let backend: Backend | null = null;
+/** 테스트가 가짜 저장소를 끼운다. null 이면 다음 호출 때 IndexedDB 로 돌아간다 */
+export function setBackend(b: Backend | null): void {
+  backend = b;
+}
+
+async function call<T>(fn: (b: Backend) => Promise<T>): Promise<T> {
   try {
-    res = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
-  } catch {
-    listeners.onConnection("lost");
-    throw new RequestError("NETWORK", NETWORK_MESSAGE, 0);
-  }
-  listeners.onConnection("ok");
-  if (res.ok) return res;
-
-  const err: unknown = await res.json().catch(() => null);
-  const code = isApiError(err) ? err.error.code : res.status === 401 ? "UNAUTHORIZED" : "UNKNOWN";
-  if (code === "UNAUTHORIZED") listeners.onUnauthorized();
-  const message = isApiError(err) ? err.error.message : code === "UNKNOWN" ? UNKNOWN_MESSAGE : ERROR_MESSAGES[code];
-  throw new RequestError(code, message, res.status);
-}
-
-export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  if (mock) {
-    const data = await mock(method, path, body);
+    const result = await fn((backend ??= defaultBackend()));
     listeners.onConnection("ok");
-    return data as T;
+    return result;
+  } catch (e) {
+    if (e instanceof RequestError) {
+      listeners.onConnection("ok");
+      throw e;
+    }
+    listeners.onConnection("lost");
+    throw new RequestError("STORAGE", STORAGE_MESSAGE);
   }
-  const res = await send(method, path, body);
-  return (res.status === 204 ? null : await res.json()) as T;
-}
-
-/** 이미지처럼 <img>가 헤더를 못 붙이는 바이트 응답. 다 쓰면 URL.revokeObjectURL 로 해제한다. */
-export async function requestObjectUrl(path: string): Promise<string> {
-  if (mock) throw new RequestError("NOT_FOUND", ERROR_MESSAGES.NOT_FOUND, 404);
-  const res = await send("GET", path);
-  return URL.createObjectURL(await res.blob());
 }
 
 export const api = {
-  universe: (from: string, to: string) =>
-    request<UniverseResponse>("GET", `/api/universe?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`),
-  star: (id: string) => request<StarResponse>("GET", `/api/stars/${encodeURIComponent(id)}`),
+  universe: (from: string, to: string) => call((b) => b.universe(from, to)),
+  star: (id: string) => call((b) => b.star(id)),
+  /** 기록 넣기 (웹 입력창·끌어다 놓기·붙여넣기) */
+  createStars: (input: CreateInput) => call((b) => b.createStars(input)),
+  /** 이미지 별의 원본 → blob URL. 다 쓰면 URL.revokeObjectURL 로 해제한다 */
+  thumbnailUrl: (starId: string) => call((b) => b.thumbnailUrl(starId)),
   /** 탐사선 내보내기 생성 (SPEC 3-8). 복사는 웹이 한다 */
-  exportCargo: (body: ExportRequest) => request<ExportResponse>("POST", "/api/export", body),
+  exportCargo: (body: Parameters<Backend["exportCargo"]>[0]) => call((b) => b.exportCargo(body)),
   /** 오늘의 재발견 별 (SPEC 3-6). 후보가 없으면 null */
-  rediscoveryToday: () => request<RediscoveryTodayResponse>("GET", "/api/rediscovery/today"),
-  /** 재발견 이벤트 기록 (POST /api/rediscovery/events) */
-  rediscoveryEvent: (body: RediscoveryEventRequest) => request<null>("POST", "/api/rediscovery/events", body),
+  rediscoveryToday: () => call((b) => b.rediscoveryToday()),
+  /** 재발견 이벤트 기록 */
+  rediscoveryEvent: (body: Parameters<Backend["rediscoveryEvent"]>[0]) => call((b) => b.rediscoveryEvent(body)),
+  /** 빈 우주에 예시 별 넣기. 넣은 개수 (이미 별이 있으면 0) */
+  seedDemo: () => call((b) => b.seedDemo()),
 };

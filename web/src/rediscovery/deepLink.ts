@@ -16,11 +16,6 @@ export function periodToShowStar(starDate: string, current: Period, now: Date = 
   return customPeriod(starDate, toLocalDateString(now));
 }
 
-/** 알림이 연 주소인지: `#/star/:id?from=rediscovery` */
-export function isRediscoveryLink(params: URLSearchParams): boolean {
-  return params.get("from") === "rediscovery";
-}
-
 /** 카드 shown 이벤트는 그날 처음 1회만 보낸다 (이슈 #7). 저장 키 */
 export function cardShownKey(localDate: string, starId: string): string {
   return `spacelog.rediscovery.cardShown.${localDate}.${starId}`;

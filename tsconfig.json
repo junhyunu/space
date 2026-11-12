@@ -13,7 +13,5 @@
     "erasableSyntaxOnly": true,
     "types": ["node"]
   },
-  "include": ["packages/**/*.ts", "mocks/**/*.ts", "apps/**/*.ts"],
-  // 수집 앱은 Electron 타입이 필요해 자기 tsconfig로 검사한다 (apps/collector: npm run typecheck)
-  "exclude": ["apps/collector"]
+  "include": ["packages/**/*.ts"]
 }

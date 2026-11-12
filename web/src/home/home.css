@@ -70,3 +70,15 @@ kbd { font-family: var(--font-mono); font-size: var(--font-size-xs); background:
 }
 
 .perf { position: fixed; left: 50%; top: var(--gutter); transform: translateX(-50%); z-index: 40; padding: 4px 12px; font: 600 13px var(--font-mono); }
+
+/* 기록 넣기 (수집 앱 대신 웹에서) */
+.topbar__actions { display: flex; gap: var(--space-2); flex-wrap: wrap; align-items: center; }
+.add-record__open { font-size: var(--font-size-sm); padding: 6px 12px; }
+.add-record { display: flex; flex-direction: column; gap: var(--space-2); min-width: min(560px, calc(100vw - 6 * var(--space-4))); }
+.add-record__label { font-size: var(--font-size-sm); font-weight: 700; }
+.add-record__text { width: 100%; box-sizing: border-box; font: inherit; resize: vertical; padding: var(--space-2) var(--space-3); border: var(--line-thin) solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-field); color: var(--color-text); margin-bottom: var(--space-2); }
+.add-record__text:focus-visible, .add-record input[type="file"]:focus-visible { outline: 3px solid var(--color-focus); outline-offset: 2px; }
+.add-record__tip { margin: var(--space-2) 0 0; font-size: var(--font-size-xs); color: var(--color-text-muted); line-height: 1.5; }
+.drop-overlay { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: var(--color-overlay); pointer-events: none; }
+.drop-overlay__card { padding: 20px 28px; font-family: var(--font-display); font-size: var(--font-size-lg); border-style: dashed; }
+.empty__action { margin-top: var(--space-3); }
