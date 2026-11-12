@@ -27,7 +27,8 @@ export class StarsView {
   private readonly so = new THREE.Vector3(1.16, 1.16, 1.16);
   private readonly up = new THREE.Vector3(0, 1, 0);
 
-  constructor(stars: Star[], toon: Toon) {
+  /** pinkIds: 늘 핑크로 그릴 별 (재발견 손님 별, DESIGN v0.5 W-01) */
+  constructor(stars: Star[], toon: Toon, pinkIds: ReadonlySet<string> = new Set()) {
     const yellow = cssColor("yellow", "#ffd23f"); // 별은 모두 노랑, 고른 별만 핑크 (DESIGN 8장)
     const geo = starGeometry();
     const count = Math.max(stars.length, 1);
@@ -44,7 +45,7 @@ export class StarsView {
         tilt: new THREE.Quaternion().setFromEuler(new THREE.Euler(orbit.tiltX, 0, orbit.tiltZ)),
         angle: orbit.phase,
         spin: 1 + (orbit.phase % 1.4),
-        color: yellow,
+        color: pinkIds.has(star.id) ? this.selectedColor : yellow,
       };
       this.items.push(item);
       this.mesh.setColorAt(i, item.color);

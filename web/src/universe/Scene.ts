@@ -91,12 +91,22 @@ export class UniverseScene {
   // ───────── 데이터 → 장면 ─────────
 
   private sync(s: Store, prev: Store | null): void {
-    if (!prev || s.planets !== prev.planets || s.stars.length !== prev.stars.length) this.syncPlanets(s);
-    if (!prev || s.stars !== prev.stars) this.syncStars(s);
+    const dataChanged = !prev || s.planets !== prev.planets || s.stars.length !== prev.stars.length;
+    const guestChanged = !!prev && s.guestStar !== prev.guestStar;
+    // 손님 별만 바뀌면 카메라 조망은 다시 맞추지 않는다 (비행 중일 수 있다)
+    if (dataChanged || guestChanged) this.syncPlanets(s, dataChanged);
+    if (!prev || s.stars !== prev.stars || guestChanged) this.syncStars(s);
     if (!prev || s.selectedStarId !== prev.selectedStarId) this.stars?.select(s.selectedStarId);
   }
 
-  private syncPlanets(s: Store): void {
+  /** 기간 밖 손님 별 (기간 안이면 평소대로 그려지므로 null) */
+  private guestOf(s: Store) {
+    const g = s.guestStar;
+    return g && !s.stars.some((x) => x.id === g.id) ? g : null;
+  }
+
+  private syncPlanets(s: Store, reframe = true): void {
+    const guest = this.guestOf(s);
     const positions = planetPositions(s.planets);
     const starsHidden = s.stars.length > STAR_LIMIT;
     const alive = new Set<string>();
@@ -111,7 +121,8 @@ export class UniverseScene {
         view.update(p);
         view.position.set(...positions.get(p.id)!);
       }
-      const n = p.starCountInPeriod ?? 0;
+      // 손님 별의 행성은 기간 안 별이 0개여도 보이게 1개로 센다
+      const n = (p.starCountInPeriod ?? 0) + (guest?.planetId === p.id ? 1 : 0);
       // 별 상한 초과면 별을 그리지 않고 행성은 최대 반지름(6)으로 둔다 (DESIGN W-01 "별 상한 초과 상태")
       view.setTargetRadius(n > 0 && starsHidden ? PLANET_MAX_R : planetRadius(n, planetBaseRadius(p.id)));
     }
@@ -120,7 +131,7 @@ export class UniverseScene {
       view.dispose();
       this.planets.delete(id);
     }
-    this.cam.frame(
+    if (reframe) this.cam.frame(
       s.planets
         .filter((p) => (p.starCountInPeriod ?? 0) > 0)
         .map((p) => ({ pos: positions.get(p.id)!, r: planetRadius(p.starCountInPeriod ?? 0, planetBaseRadius(p.id)) })),
@@ -132,8 +143,11 @@ export class UniverseScene {
     this.stars = null;
     const hidden = s.stars.length > STAR_LIMIT;
     sceneState.setState({ starsHidden: hidden });
-    if (hidden || s.stars.length === 0) return;
-    this.stars = new StarsView(s.stars, this.toon);
+    // 별 상한 초과 상태에서도 손님 별 하나는 그린다 (DESIGN v0.5)
+    const guest = this.guestOf(s);
+    const draw = [...(hidden ? [] : s.stars), ...(guest ? [guest] : [])];
+    if (draw.length === 0) return;
+    this.stars = new StarsView(draw, this.toon, new Set(guest ? [guest.id] : []));
     this.stars.addTo(this.scene);
     this.stars.select(s.selectedStarId);
   }

@@ -2,7 +2,7 @@
 // React 화면은 useStore(selector)로, 3D 코드는 store.getState()/store.subscribe()로 쓴다.
 import { createStore, useStore as useZustand } from "zustand";
 import { todayPeriod, weekPeriod } from "@spacelog/shared/period";
-import type { CargoItem, Period, WebState } from "@spacelog/shared/types";
+import type { CargoItem, Period, Star, WebState } from "@spacelog/shared/types";
 import { api, RequestError } from "../api/client.ts";
 import { formatHash, type Route } from "../router.ts";
 
@@ -18,6 +18,8 @@ export type FlyHandler = (planetId: string) => Promise<boolean>;
 export interface Store extends WebState {
   route: Route;
   loading: boolean;
+  /** 재발견으로 들어온 기간 밖 별. 기간과 상관없이 그 별만 핑크로 보인다 (DESIGN v0.5 W-01) */
+  guestStar: Star | null;
   toasts: ToastItem[];
 
   // ── SPEC 2-5 호출 계약 8종 ──
@@ -43,6 +45,8 @@ export interface Store extends WebState {
   planetMerged(fromId: string, toId: string): void;
   /** Esc: 탐사선 → 상세 → 패널 → 조망 순서로 한 단계 뒤로 (SPEC 3-5) */
   goBack(): void;
+  /** 재발견 손님 별 보이기·숨기기. 그 별의 상세(W-03)를 벗어나면 스토어가 스스로 숨긴다 */
+  setGuestStar(star: Star | null): void;
 
   // ── 데이터 ──
   loadInitial(): Promise<void>;
@@ -95,6 +99,7 @@ export function createWebStore(navigate: (hash: string) => void = defaultNavigat
       exportFormat: "claude",
       route: { name: "home" },
       loading: false,
+      guestStar: null,
       toasts: [],
 
       async flyToPlanet(planetId, then) {
@@ -252,12 +257,18 @@ export function createWebStore(navigate: (hash: string) => void = defaultNavigat
         go({ name: "probe" });
       },
 
+      setGuestStar(guestStar) {
+        set({ guestStar });
+      },
+
       applyRoute(route) {
+        const prevStarId = get().selectedStarId;
         set({ route });
         if (route.name === "home") set({ selectedPlanetId: null, selectedStarId: null });
         else if (route.name === "planet") set({ selectedPlanetId: route.id, selectedStarId: null });
         else if (route.name === "star") {
-          const star = get().stars.find((s) => s.id === route.id);
+          const guest = get().guestStar;
+          const star = get().stars.find((s) => s.id === route.id) ?? (guest?.id === route.id ? guest : undefined);
           set({ selectedStarId: route.id, selectedPlanetId: star?.planetId ?? get().selectedPlanetId });
           if (!star) {
             // 기간 밖 별(재발견·새로고침 등): 별을 받아 행성을 찾는다
@@ -275,6 +286,9 @@ export function createWebStore(navigate: (hash: string) => void = defaultNavigat
             );
           }
         }
+        // 손님 별의 상세를 벗어나면(목록으로·패널 닫기·다른 곳으로) 손님 별을 숨긴다
+        const guest = get().guestStar;
+        if (guest && prevStarId === guest.id && get().selectedStarId !== guest.id) set({ guestStar: null });
       },
 
       setConnection(connection) {

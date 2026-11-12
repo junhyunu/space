@@ -99,6 +99,18 @@ describe("store 계약", () => {
     has(s.getState(), { selectedPlanetId: null, camera: "flight" });
   });
 
+  it("재발견 손님 별: 그 별 상세를 벗어날 때만 숨긴다 (DESIGN v0.5)", () => {
+    const guest = star("old", "b");
+    s.getState().setGuestStar(guest);
+    s.getState().openPanel("a"); // 아직 상세를 연 적 없음(비행 중) → 그대로
+    assert.equal(s.getState().guestStar?.id, "old");
+    s.getState().openStar("old"); // 기간 밖이어도 손님 별로 행성을 안다
+    has(s.getState(), { selectedStarId: "old", selectedPlanetId: "b" });
+    assert.equal(s.getState().guestStar?.id, "old");
+    s.getState().goBack(); // 상세 → 목록
+    assert.equal(s.getState().guestStar, null);
+  });
+
   it("addToCargo 는 같은 항목을 두 번 넣지 않는다", () => {
     const g = s.getState();
     assert.equal(g.addToCargo({ type: "star", starId: "s1" }), true);

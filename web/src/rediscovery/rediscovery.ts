@@ -1,25 +1,36 @@
 // 재발견 웹 쪽 (이슈 #7, SPEC 3-6). 카드 껍데기 UI는 개발 C(#3)가 만들고, 데이터·이벤트·별 열기는 여기서 맡는다.
-// 스토어는 공개 계약(setPeriod·flyToPlanet·openStar)만 쓴다.
+// 스토어는 공개 계약(setGuestStar·flyToPlanet·openStar)만 쓴다.
 import { useEffect, useState } from "react";
 import { toLocalDateString } from "@spacelog/shared/period";
 import type { RediscoveryEventRequest, RediscoveryTodayResponse, Star } from "@spacelog/shared/types";
 import { api } from "../api/client.ts";
 import { store, useStore } from "../state/store.ts";
-import { cardShownKey, periodToShowStar, starLocalDate } from "./deepLink.ts";
+import { cardShownKey, isInPeriod, rediscoveryToast, starLocalDate } from "./deepLink.ts";
 
 /** 이벤트 기록은 측정용이라 실패해도 화면을 막지 않는다 */
 function record(event: RediscoveryEventRequest): void {
   api.rediscoveryEvent(event).catch(() => {});
 }
 
-/** 재발견 별 열기: 기간 밖이면 직접 지정으로 넓힘 → 그 행성으로 이동 → 별 상세 (SPEC 3-6, #19 도착 화면 = 별 상세) */
+/**
+ * 재발견 별 열기 (DESIGN v0.5 W-01). 기간은 바꾸지 않는다.
+ * 기간 밖이면 그 별 하나만 핑크로 보이게(손님 별) 하고 → 그 행성으로 자동 비행 → 별 상세(W-03).
+ * 손님 별은 W-03을 벗어나면 스토어가 숨기고, 자동 비행을 이동 키로 멈춰도 숨긴다.
+ */
 export async function openRediscoveredStar(star: Star): Promise<void> {
   const s = store.getState();
-  const period = periodToShowStar(starLocalDate(star), s.period);
-  if (period) await s.setPeriod(period);
+  const date = starLocalDate(star);
+  const planetName = s.planets.find((p) => p.id === star.planetId)?.name ?? "행성";
+  if (!isInPeriod(date, s.period)) s.setGuestStar(star);
+  s.showToast(rediscoveryToast(date, s.period, planetName));
   // 비행 연출은 화면 갱신(requestAnimationFrame)에 묶여 있어, 탭이 가려져 있으면 끝나지 않는다.
   // 연출이 늦어도 별 상세는 반드시 열리도록 기다리는 시간을 제한한다.
-  await Promise.race([store.getState().flyToPlanet(star.planetId), wait(FLY_WAIT_LIMIT_MS)]);
+  const arrived = await Promise.race([store.getState().flyToPlanet(star.planetId), wait(FLY_WAIT_LIMIT_MS).then(() => true)]);
+  if (!arrived) {
+    // 사용자가 이동 키로 자동 비행을 멈췄다 → 손님 별을 숨기고 상세는 열지 않는다
+    if (store.getState().guestStar?.id === star.id) store.getState().setGuestStar(null);
+    return;
+  }
   store.getState().openStar(star.id);
 }
 
