@@ -34,7 +34,7 @@ SpaceLog는 기록이 내 PC에만 있는 제품이다 (PRD 3장, [POLICY](../do
 
 ## 내려받기 링크
 
-`#받기`의 Windows·macOS 줄은 `https://github.com/delightPIP/teamproject/releases/latest`로 간다 (이슈 #57). 이 주소는 **공개된(Publish) 릴리스가 하나라도 있어야** 열린다 — 초안만 있으면 404다. 그래서 순서는 태그 푸시 → Release 초안 확인 → Publish → 이 페이지가 Render에 올라가 있는지 확인. 만드는 법은 [apps/collector/README.md](../apps/collector/README.md) "설치 파일 만들기".
+`#받기`의 Windows·macOS 줄은 `https://github.com/junhyunu/space/releases/latest`로 간다 (이슈 #57). 이 주소는 **공개된(Publish) 릴리스가 하나라도 있어야** 열린다 — 초안만 있으면 404다. 그래서 순서는 태그 푸시 → Release 초안 확인 → Publish → 이 페이지가 Render에 올라가 있는지 확인. 만드는 법은 [apps/collector/README.md](../apps/collector/README.md) "설치 파일 만들기".
 
 zip 파일 이름(`SpaceLog-<버전>-windows-x64.zip` 등)을 바꾸면 `#받기` 안내 문구도 같이 고친다.
 
